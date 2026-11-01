@@ -300,6 +300,12 @@ final class AppModel {
 
     func isFavorite(_ key: String) -> Bool { favorites.contains(key) }
 
+    /// Saves the order the user dragged the visible saved items into.
+    func reorderFavorites(shown: [String]) {
+        favorites = Favorites.reorder(favorites, shown: shown)
+        UserDefaults.standard.set(favorites, forKey: Self.favoritesKey)
+    }
+
     func toggleFavorite(_ key: String) {
         if let index = favorites.firstIndex(of: key) {
             favorites.remove(at: index)

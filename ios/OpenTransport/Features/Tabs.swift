@@ -39,28 +39,41 @@ struct SavedTab: View {
                 if shown.isEmpty {
                     ContentUnavailableView(s.starToSave, systemImage: "star").frame(maxHeight: .infinity)
                 } else {
-                    List(shown) { item in
-                        Button {
-                            switch item {
-                            case .stop(let stop): model.openStop(stop.id)
-                            case .place(let place): model.openPlace(place)
-                            }
-                        } label: {
-                            SavedRow(item: item)
-                        }
-                        .tint(.primary)
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                model.toggleFavorite(item.id)
+                    List {
+                        ForEach(shown) { item in
+                            Button {
+                                switch item {
+                                case .stop(let stop): model.openStop(stop.id)
+                                case .place(let place): model.openPlace(place)
+                                }
                             } label: {
-                                Label(s.remove, systemImage: "trash")
+                                SavedRow(item: item)
                             }
+                            .tint(.primary)
+                            .swipeActions {
+                                Button(role: .destructive) {
+                                    model.toggleFavorite(item.id)
+                                } label: {
+                                    Label(s.remove, systemImage: "trash")
+                                }
+                            }
+                        }
+                        // Touch and hold a row, then drag it; or "Edit" for the handles.
+                        .onMove { from, to in
+                            var ids = shown.map(\.id)
+                            ids.move(fromOffsets: from, toOffset: to)
+                            model.reorderFavorites(shown: ids)
                         }
                     }
                     .listStyle(.plain)
                 }
             }
             .navigationTitle(s.saved)
+            .toolbar {
+                if !shown.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) { EditButton() }
+                }
+            }
         }
     }
 
