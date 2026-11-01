@@ -235,15 +235,14 @@ private struct StatCard: View {
     }
 }
 
-/// Metrobús: live next bus (and occupancy) per line, plus the day's timetable.
+/// Metrobús: live next bus (and occupancy) per line, its live buses and the
+/// timetable.
 private struct MetrobusArrivals: View {
     let place: Place
 
     @Environment(AppModel.self) private var model
     @Environment(\.strings) private var s
     @State private var times: [Arrival]?
-    @State private var schedule: [MetrobusTime] = []
-    @State private var showSchedule = false
 
     private var code: String { String(place.id.dropFirst(3)) }
 
@@ -261,103 +260,137 @@ private struct MetrobusArrivals: View {
                                                                    LonLat(lon: vehicle.lon, lat: vehicle.lat)))
     }
 
+    // Sections straight into the List, no Group: a Group hands its modifiers to
+    // every child, which ran the polling twice and doubled the timetable sheet.
     var body: some View {
-        Group {
-            Section(s.nextDepartures) {
-                if let times {
-                    if times.isEmpty {
-                        Text(s.noUpcomingBuses).foregroundStyle(.secondary)
-                    } else {
-                        ForEach(Array(times.enumerated()), id: \.offset) { _, arrival in
-                            HStack(spacing: 12) {
-                                LineBadge(line: arrival.line)
-                                Text(arrival.destination.isEmpty ? "—" : arrival.destination).lineLimit(1)
-                                Spacer()
-                                Text(minutesLabel(arrival.minutes))
-                                    .font(.subheadline.weight(.semibold))
-                                    .monospacedDigit()
-                                    .foregroundStyle(Color.accentColor)
-                                PinButton(pin: ArrivalAlerts.metrobusPin(place.id, arrival.line))
-                            }
-                        }
-                    }
-                    if !schedule.isEmpty {
-                        Button {
-                            showSchedule = true
-                        } label: {
-                            Label(s.timetable, systemImage: "clock")
-                        }
-                    }
+        Section(s.nextDepartures) {
+            if let times {
+                if times.isEmpty {
+                    Text(s.noUpcomingBuses).foregroundStyle(.secondary)
                 } else {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                        Spacer()
-                    }
-                }
-            }
-            if !model.metrobusVehicles.isEmpty {
-                Section(s.liveBusesTitle) {
-                    ForEach(model.metrobusVehicles) { vehicle in
-                        Button {
-                            model.map.selectMetrobusBus(vehicle)
-                        } label: {
-                            HStack(spacing: 12) {
-                                LineBadge(line: vehicle.line)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(vehicle.destination.isEmpty ? "—" : vehicle.destination).lineLimit(1)
-                                    if !vehicle.occupancy.isEmpty {
-                                        Text(s.occupancy(vehicle.occupancy)).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Spacer()
-                                Text(distance(to: vehicle)).font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                            }
+                    ForEach(Array(times.enumerated()), id: \.offset) { _, arrival in
+                        HStack(spacing: 12) {
+                            LineBadge(line: arrival.line)
+                            Text(arrival.destination.isEmpty ? "—" : arrival.destination).lineLimit(1)
+                            Spacer()
+                            Text(minutesLabel(arrival.minutes))
+                                .font(.subheadline.weight(.semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(Color.accentColor)
+                            PinButton(pin: ArrivalAlerts.metrobusPin(place.id, arrival.line))
                         }
-                        .tint(.primary)
                     }
                 }
+            } else {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
             }
-        }
-        .sheet(isPresented: $showSchedule) {
-            MetrobusTimetable(schedule: schedule)
-                .presentationDetents([.medium, .large])
+            // Always there: with no more buses today it shows the next days.
+            NavigationLink {
+                MetrobusTimetable(code: code)
+            } label: {
+                Label(s.timetable, systemImage: "clock")
+            }
         }
         .task(id: place.id) {
-            var loadedSchedule = false
             while !Task.isCancelled {
                 let fresh = await model.metrobus.arrivals(code: code)
                 if !Task.isCancelled { times = fresh }
-                if !loadedSchedule {
-                    loadedSchedule = true
-                    schedule = await model.metrobus.schedule(code: code)
-                }
                 try? await Task.sleep(for: .seconds(30))
+            }
+        }
+        if !model.metrobusVehicles.isEmpty {
+            Section(s.liveBusesTitle) {
+                ForEach(model.metrobusVehicles) { vehicle in
+                    Button {
+                        model.map.selectMetrobusBus(vehicle)
+                    } label: {
+                        HStack(spacing: 12) {
+                            LineBadge(line: vehicle.line)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(vehicle.destination.isEmpty ? "—" : vehicle.destination).lineLimit(1)
+                                if !vehicle.occupancy.isEmpty {
+                                    Text(s.occupancy(vehicle.occupancy)).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            Text(distance(to: vehicle)).font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                    }
+                    .tint(.primary)
+                }
             }
         }
     }
 }
 
+/// A Metrobús stop's timetable for a chosen day, pushed inside the stop sheet.
+/// The service only lists days with departures left, so when today has none
+/// it opens on the next day that has some.
 private struct MetrobusTimetable: View {
-    let schedule: [MetrobusTime]
+    let code: String
 
+    @Environment(AppModel.self) private var model
     @Environment(\.strings) private var s
+    @State private var day = Calendar.current.startOfDay(for: Date())
+    @State private var schedule: [MetrobusTime]?
+    @State private var choseDay = false
+
+    private var today: Date { Calendar.current.startOfDay(for: Date()) }
 
     var body: some View {
-        let hours = Dictionary(grouping: schedule, by: \.hour).sorted { $0.key < $1.key }
-        NavigationStack {
-            List(hours, id: \.key) { item in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String(format: "%02d:00", item.key)).font(.headline).monospacedDigit()
-                    Text(item.value.map { String(format: "%02d %@", $0.minute, String($0.line.dropFirst(2))) }.joined(separator: "   "))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+        List {
+            Section {
+                DatePicker(s.day, selection: $day, in: today..., displayedComponents: .date)
+            }
+            if let schedule {
+                if schedule.isEmpty {
+                    Text(s.noDeparturesThisDay).foregroundStyle(.secondary)
+                } else {
+                    let hours = Dictionary(grouping: schedule, by: \.hour).sorted { $0.key < $1.key }
+                    ForEach(hours, id: \.key) { item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(String(format: "%02d:00", item.key)).font(.headline).monospacedDigit()
+                            Text(item.value.map { String(format: "%02d %@", $0.minute, String($0.line.dropFirst(2))) }
+                                .joined(separator: "   "))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                }
+            } else {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
                 }
             }
-            .navigationTitle(s.timetable)
-            .navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationTitle(s.timetable)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: day) {
+            schedule = nil
+            var loaded = await model.metrobus.schedule(code: code, date: day)
+            // First open with nothing left today: look ahead up to a week.
+            if loaded.isEmpty, !choseDay {
+                for offset in 1...7 {
+                    guard let next = Calendar.current.date(byAdding: .day, value: offset, to: day) else { break }
+                    let found = await model.metrobus.schedule(code: code, date: next)
+                    if !found.isEmpty {
+                        loaded = found
+                        choseDay = true
+                        day = next // re-runs this task once, with choseDay set
+                        return
+                    }
+                }
+            }
+            choseDay = true
+            if !Task.isCancelled { schedule = loaded }
         }
     }
 }

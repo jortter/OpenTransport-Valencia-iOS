@@ -80,6 +80,10 @@ extension Strings {
     public var metrobusBusGone: String {
         pick("Este autobús ya no envía su posición.", "This bus no longer reports its position.", "Este autobús ja no envia la seua posició.")
     }
+    public var day: String { pick("Día", "Day", "Dia") }
+    public var noDeparturesThisDay: String {
+        pick("No hay salidas este día", "No departures on this day", "No hi ha eixides este dia")
+    }
     /// The occupancy level alone ("baja"), empty when the API has no data.
     public func occupancyLevel(_ level: String) -> String {
         switch level.uppercased() {
