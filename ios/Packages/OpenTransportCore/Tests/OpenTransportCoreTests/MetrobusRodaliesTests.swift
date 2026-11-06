@@ -131,3 +131,24 @@ final class MetrobusVehicleTests: XCTestCase {
         XCTAssertTrue(MetrobusClient.parseVehicles("<html>").isEmpty)
     }
 }
+
+final class MetrobusScheduleTests: XCTestCase {
+    func testDropOffOnlyAndMinuteOfDay() {
+        // Trimmed real reply of /stops/code/700/times.
+        let reply = #"{"05":[{"minute":"15","route_short_name":"161","direction":"València","pickup_type":1,"isLastStop":false},{"minute":"26","route_short_name":"160B","direction":"València","pickup_type":0,"isLastStop":true}],"14":[{"minute":"07","route_short_name":"150","direction":"Aeroport","pickup_type":0,"isLastStop":false}]}"#
+        let times = MetrobusClient.parseSchedule(reply)
+        XCTAssertEqual(times.map(\.line), ["MB161", "MB160B", "MB150"])
+        XCTAssertEqual(times.map(\.dropOffOnly), [true, true, false])
+        XCTAssertEqual(times.last?.minuteOfDay, 14 * 60 + 7)
+    }
+
+    func testRodaliesFullDaySchedule() {
+        let data = RodaliesData(places: [], routes: [:], timetable: [
+            "X": ["06:10|C6|CIVIS", "05:40|C6|València-Estació del Nord", "24:05|C1|Gandia", "bad"],
+        ])
+        let times = data.schedule(at: "X")
+        XCTAssertEqual(times.map(\.minuteOfDay), [5, 340, 370]) // 00:05, 05:40, 06:10
+        XCTAssertEqual(times.last?.destination, "CIVIS")
+        XCTAssertTrue(data.schedule(at: "Nowhere").isEmpty)
+    }
+}

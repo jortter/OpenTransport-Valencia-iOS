@@ -79,6 +79,19 @@ public struct RodaliesData: Sendable {
         return (order.compactMap { stations[$0] }, routes)
     }
 
+    /// The whole day's departures at a station (the bundled table is the
+    /// usual weekday service; it has no calendar).
+    public func schedule(at stationName: String) -> [ScheduledDeparture] {
+        (timetable[stationName] ?? []).compactMap { entry -> ScheduledDeparture? in
+            let parts = entry.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            let time = parts.first?.split(separator: ":") ?? []
+            guard parts.count >= 2, time.count >= 2, let hour = Int(time[0]), let minute = Int(time[1]) else { return nil }
+            // GTFS hours can run past midnight ("24:10").
+            return ScheduledDeparture(hour: hour % 24, minute: minute, line: parts[1], destination: parts.count > 2 ? parts[2] : "")
+        }
+        .sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
+    }
+
     /// Departures in the next 3 hours at a station (bundled GTFS table).
     public func times(at stationName: String, now: Date = Date()) -> [Arrival] {
         guard let list = timetable[stationName] else { return [] }

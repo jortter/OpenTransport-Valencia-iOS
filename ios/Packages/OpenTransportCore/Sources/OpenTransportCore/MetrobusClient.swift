@@ -1,11 +1,16 @@
 import Foundation
 
-/// One scheduled Metrobús departure in the day's timetable.
-public struct MetrobusTime: Hashable, Sendable {
+/// One departure in a stop's timetable (Metrobús, Rodalies).
+public struct ScheduledDeparture: Hashable, Sendable {
     public let hour: Int
     public let minute: Int
     public let line: String
     public let destination: String
+    /// No boarding here: the bus only lets people off (or ends at this stop).
+    public var dropOffOnly = false
+
+    /// Minutes since midnight, for comparing with the time now.
+    public var minuteOfDay: Int { hour * 60 + minute }
 }
 
 /// A Metrobús line's shapes and brand colour, for drawing it on the map.
@@ -101,7 +106,7 @@ public final class MetrobusClient: Sendable {
     }
 
     /// The whole day's timetable for a stop code.
-    public func schedule(code: String, date: Date = Date()) async -> [MetrobusTime] {
+    public func schedule(code: String, date: Date = Date()) async -> [ScheduledDeparture] {
         guard let text = try? await get("/stops/code/\(code)/times?date=\(Self.dayFormat.string(from: date))") else { return [] }
         return Self.parseSchedule(text)
     }
@@ -202,15 +207,18 @@ public final class MetrobusClient: Sendable {
         return out.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
-    static func parseSchedule(_ text: String) -> [MetrobusTime] {
+    static func parseSchedule(_ text: String) -> [ScheduledDeparture] {
         guard let root = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] else { return [] }
-        var out: [MetrobusTime] = []
+        var out: [ScheduledDeparture] = []
         for (key, value) in root {
             guard let hour = Int(key), let items = value as? [[String: Any]] else { continue }
             for item in items {
                 guard let minute = jsonInt(item["minute"]) else { continue }
                 let line = "MB" + (item["route_short_name"].map { "\($0)" } ?? "")
-                out.append(MetrobusTime(hour: hour, minute: minute, line: line, destination: item["direction"] as? String ?? ""))
+                // GTFS pickup_type 1 = no pickup; the last stop of a trip has none either.
+                let dropOffOnly = jsonInt(item["pickup_type"]) == 1 || (item["isLastStop"] as? Bool ?? false)
+                out.append(ScheduledDeparture(hour: hour, minute: minute, line: line, destination: item["direction"] as? String ?? "",
+                                        dropOffOnly: dropOffOnly))
             }
         }
         return out.sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }

@@ -81,6 +81,15 @@ extension Strings {
         pick("Este autobús ya no envía su posición.", "This bus no longer reports its position.", "Este autobús ja no envia la seua posició.")
     }
     public var day: String { pick("Día", "Day", "Dia") }
+    public var today: String { pick("Hoy", "Today", "Hui") }
+    public var tomorrow: String { pick("Mañana", "Tomorrow", "Demà") }
+    public var nextDeparture: String { pick("Próxima", "Next", "Pròxima") }
+    public var dropOffOnly: String { pick("Solo bajada", "Drop-off only", "Només baixada") }
+    public var usualTimetableNote: String {
+        pick("Horario habitual de Renfe incluido en la app; puede cambiar en festivos u obras.",
+             "Renfe's usual timetable, bundled with the app; it may change on holidays or during works.",
+             "Horari habitual de Renfe inclòs en l'app; pot canviar en festius o obres.")
+    }
     public var noDeparturesThisDay: String {
         pick("No hay salidas este día", "No departures on this day", "No hi ha eixides este dia")
     }

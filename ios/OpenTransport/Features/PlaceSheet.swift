@@ -290,7 +290,9 @@ private struct MetrobusArrivals: View {
             }
             // Always there: with no more buses today it shows the next days.
             NavigationLink {
-                MetrobusTimetable(code: code)
+                TimetableView(load: { [metrobus = model.metrobus, code] day in
+                    await metrobus.schedule(code: code, date: day)
+                })
             } label: {
                 Label(s.timetable, systemImage: "clock")
             }
@@ -328,73 +330,6 @@ private struct MetrobusArrivals: View {
     }
 }
 
-/// A Metrobús stop's timetable for a chosen day, pushed inside the stop sheet.
-/// The service only lists days with departures left, so when today has none
-/// it opens on the next day that has some.
-private struct MetrobusTimetable: View {
-    let code: String
-
-    @Environment(AppModel.self) private var model
-    @Environment(\.strings) private var s
-    @State private var day = Calendar.current.startOfDay(for: Date())
-    @State private var schedule: [MetrobusTime]?
-    @State private var choseDay = false
-
-    private var today: Date { Calendar.current.startOfDay(for: Date()) }
-
-    var body: some View {
-        List {
-            Section {
-                DatePicker(s.day, selection: $day, in: today..., displayedComponents: .date)
-            }
-            if let schedule {
-                if schedule.isEmpty {
-                    Text(s.noDeparturesThisDay).foregroundStyle(.secondary)
-                } else {
-                    let hours = Dictionary(grouping: schedule, by: \.hour).sorted { $0.key < $1.key }
-                    ForEach(hours, id: \.key) { item in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(String(format: "%02d:00", item.key)).font(.headline).monospacedDigit()
-                            Text(item.value.map { String(format: "%02d %@", $0.minute, String($0.line.dropFirst(2))) }
-                                .joined(separator: "   "))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                    }
-                }
-            } else {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-            }
-        }
-        .navigationTitle(s.timetable)
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: day) {
-            schedule = nil
-            var loaded = await model.metrobus.schedule(code: code, date: day)
-            // First open with nothing left today: look ahead up to a week.
-            if loaded.isEmpty, !choseDay {
-                for offset in 1...7 {
-                    guard let next = Calendar.current.date(byAdding: .day, value: offset, to: day) else { break }
-                    let found = await model.metrobus.schedule(code: code, date: next)
-                    if !found.isEmpty {
-                        loaded = found
-                        choseDay = true
-                        day = next // re-runs this task once, with choseDay set
-                        return
-                    }
-                }
-            }
-            choseDay = true
-            if !Task.isCancelled { schedule = loaded }
-        }
-    }
-}
-
 /// Rodalies: departures in the next 3 hours from the bundled timetable.
 private struct RodaliesDepartures: View {
     let place: Place
@@ -419,6 +354,13 @@ private struct RodaliesDepartures: View {
                             .monospacedDigit()
                             .foregroundStyle(Color.accentColor)
                     }
+                }
+            }
+            if let rodalies = model.rodalies, !rodalies.schedule(at: place.name).isEmpty {
+                NavigationLink {
+                    TimetableView(load: { _ in rodalies.schedule(at: place.name) }, byDay: false, note: s.usualTimetableNote)
+                } label: {
+                    Label(s.timetable, systemImage: "clock")
                 }
             }
         }
