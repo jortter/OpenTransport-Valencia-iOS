@@ -16,6 +16,14 @@ public struct RodaliesData: Sendable {
 
     static let idBase = 3_000_000
 
+    /// Official line colours of Cercanías València (route_color in Renfe's
+    /// GTFS, fomento_transit.zip); the bundled geojson has every line in red.
+    public static let lineColors: [String: Int] = [
+        "C1": 0x7AB3DE, "C2": 0xF79529, "C3": 0x7A2780, "C5": 0x018A27, "C6": 0x0D3386,
+    ]
+    /// Renfe red, for any line not in the table.
+    public static let networkColor = 0xE30613
+
     public static func load(from directory: URL) -> RodaliesData {
         let network = (try? Data(contentsOf: directory.appendingPathComponent("rodalies.geojson"))).map(parseNetwork) ?? ([], [:])
         let times = (try? Data(contentsOf: directory.appendingPathComponent("rodalies_times.json")))

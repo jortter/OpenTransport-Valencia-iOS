@@ -50,6 +50,24 @@ public final class MetrobusClient: Sendable {
             .min()
     }
 
+    /// Every line's official colour ("MB150" → 0x25D5FF), from one request.
+    public func lineColors() async -> [String: Int] {
+        guard let text = try? await get("/old/routes") else { return [:] }
+        return Self.parseLineColors(text)
+    }
+
+    static func parseLineColors(_ text: String) -> [String: Int] {
+        guard let routes = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [[String: Any]] else { return [:] }
+        var out: [String: Int] = [:]
+        for route in routes {
+            guard let short = route["route_short_name"].map({ "\($0)" }), !short.isEmpty,
+                  let hex = route["route_color"] as? String,
+                  let color = Int(hex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")), radix: 16) else { continue }
+            out["MB\(short)"] = color
+        }
+        return out
+    }
+
     /// Live positions of the buses on `lines`. There is no fleet endpoint, but
     /// every stop's estimates carry the GPS fix of the buses heading to it,
     /// so sampling every `step`-th stop along both directions finds every

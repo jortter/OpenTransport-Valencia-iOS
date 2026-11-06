@@ -151,4 +151,9 @@ final class MetrobusScheduleTests: XCTestCase {
         XCTAssertEqual(times.last?.destination, "CIVIS")
         XCTAssertTrue(data.schedule(at: "Nowhere").isEmpty)
     }
+
+    func testLineColors() {
+        let reply = #"[{"route_short_name":"150","route_color":"25D5FF"},{"route_short_name":"160B","route_color":"fe8686"},{"route_short_name":"9","route_color":""},{"route_color":"FFFFFF"}]"#
+        XCTAssertEqual(MetrobusClient.parseLineColors(reply), ["MB150": 0x25D5FF, "MB160B": 0xFE8686])
+    }
 }

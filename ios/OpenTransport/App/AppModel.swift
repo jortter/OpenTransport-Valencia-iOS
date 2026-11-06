@@ -92,7 +92,7 @@ final class AppModel {
             let rodaliesData = await Task.detached { RodaliesData.load(from: directory) }.value
             rodalies = rodaliesData
             extraRoutes.merge(rodaliesData.routes) { _, new in new }
-            for line in rodaliesData.routes.keys { extraColors[line] = 0xE30613 }
+            for line in rodaliesData.routes.keys { extraColors[line] = RodaliesData.lineColors[line] ?? RodaliesData.networkColor }
             replacePlaces(of: .rodalies, with: rodaliesData.places)
             map.configure(transit: data, client: emt)
             planner = makePlanner(data, emt: emt, metrobusCodes: [:])
@@ -101,6 +101,10 @@ final class AppModel {
             location.start()
             alerts.start(model: self)
             startMetrobus()
+            Task { [metrobus] in
+                let colors = await metrobus.lineColors()
+                if !colors.isEmpty { LineColors.shared.metrobus = colors }
+            }
             openDemoSelection()
             async let metroStations = metro.stations()
             await refreshIncidents()

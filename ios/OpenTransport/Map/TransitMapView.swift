@@ -497,9 +497,26 @@ struct TransitMapView: UIViewRepresentable {
                 source.shape = MLNShapeCollectionFeature(shapes: scene.metrobusVehicles.map { vehicle in
                     let feature = MLNPointFeature()
                     feature.coordinate = CLLocationCoordinate2D(latitude: vehicle.lat, longitude: vehicle.lon)
-                    feature.attributes = ["line": String(vehicle.line.dropFirst(2))]
+                    feature.attributes = ["line": String(vehicle.line.dropFirst(2)), "key": vehicle.line]
                     return feature
                 })
+                // Each bus in its line's colour, with white or dark numbers to match.
+                var fills: [NSExpression: NSExpression] = [:]
+                var texts: [NSExpression: NSExpression] = [:]
+                for line in Set(scene.metrobusVehicles.map(\.line)) {
+                    guard let hex = LineColors.shared.metrobus[line] else { continue }
+                    fills[NSExpression(forConstantValue: line)] = NSExpression(forConstantValue: UIColor(hex: hex))
+                    texts[NSExpression(forConstantValue: line)] = NSExpression(forConstantValue: UIColor(LineColors.textColor(on: hex)))
+                }
+                let key = NSExpression(forKeyPath: "key")
+                if let dots = style.layer(withIdentifier: "metrobus-vehicles") as? MLNCircleStyleLayer {
+                    dots.circleColor = fills.isEmpty ? NSExpression(forConstantValue: UIColor(hex: 0x0EA5E9))
+                        : NSExpression(forMLNMatchingKey: key, in: fills, default: NSExpression(forConstantValue: UIColor(hex: 0x0EA5E9)))
+                }
+                if let numbers = style.layer(withIdentifier: "metrobus-vehicle-lines") as? MLNSymbolStyleLayer {
+                    numbers.textColor = texts.isEmpty ? NSExpression(forConstantValue: UIColor.white)
+                        : NSExpression(forMLNMatchingKey: key, in: texts, default: NSExpression(forConstantValue: UIColor.white))
+                }
             }
             if previous?.placesKey != scene.placesKey, let source = style.source(withIdentifier: Self.placesSource) as? MLNShapeSource {
                 source.shape = MLNShapeCollectionFeature(shapes: scene.places.map { place in

@@ -65,9 +65,13 @@ struct LineBadge: View {
     var body: some View {
         Group {
             if isNumbered(prefix: "C") {
-                pill(line, color: Color(hex: 0xE30613))
+                let hex = RodaliesData.lineColors[line] ?? RodaliesData.networkColor
+                pill(line, color: Color(hex: hex), text: LineColors.textColor(on: hex))
             } else if line.hasPrefix("MB") {
-                pill(String(line.dropFirst(2)), color: networkColor(.metrobus))
+                // Each line in its official colour once loaded, the network's blue until then.
+                let hex = LineColors.shared.metrobus[line]
+                pill(String(line.dropFirst(2)), color: hex.map { Color(hex: $0) } ?? networkColor(.metrobus),
+                     text: hex.map(LineColors.textColor) ?? .white)
             } else if isNumbered(prefix: "M"), let metro = BundledAsset.image("metrovalencia/\(line.dropFirst()).png") {
                 bitmap(metro)
             } else if let image {
@@ -94,11 +98,11 @@ struct LineBadge: View {
         return Image(uiImage: image).resizable().frame(width: height * aspect, height: height)
     }
 
-    private func pill(_ text: String, color: Color) -> some View {
+    private func pill(_ text: String, color: Color, text textColor: Color = .white) -> some View {
         Text(text)
             .font(.system(size: height * 0.5, weight: .bold))
             .monospacedDigit()
-            .foregroundStyle(.white)
+            .foregroundStyle(textColor)
             .padding(.horizontal, height * 0.3)
             .frame(minWidth: height * 1.35, minHeight: height)
             .background(color, in: RoundedRectangle(cornerRadius: height * 0.25, style: .continuous))
@@ -129,3 +133,25 @@ func networkColor(_ network: Network) -> Color {
     case .rodalies: return Color(hex: 0xE30613)
     }
 }
+
+/// Line colours that come from a service at run time (Metrobús publishes one
+/// per line). Observed, so badges recolour as soon as they load.
+@Observable @MainActor
+final class LineColors {
+    static let shared = LineColors()
+
+    /// "MB150" → 0x25D5FF
+    var metrobus: [String: Int] = [:]
+
+    /// White or dark text, whichever reads better on `hex` (some line colours
+    /// are very light, like a fluorescent green).
+    nonisolated static func textColor(on hex: Int) -> Color {
+        func channel(_ shift: Int) -> Double {
+            let c = Double((hex >> shift) & 0xFF) / 255
+            return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+        return luminance > 0.4 ? Color(hex: 0x1F2933) : .white
+    }
+}
+
