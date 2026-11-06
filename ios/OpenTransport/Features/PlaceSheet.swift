@@ -10,6 +10,8 @@ struct PlaceSheet: View {
     @Environment(\.strings) private var s
     @Environment(\.dismiss) private var dismiss
     @State private var updatesOpen = true
+    /// `-demoTimetable YES` opens the timetable straight away (CI screenshots).
+    @State private var demoTimetable = UserDefaults.standard.bool(forKey: "demoTimetable")
 
     var body: some View {
         NavigationStack {
@@ -25,6 +27,7 @@ struct PlaceSheet: View {
                 updatesSection
             }
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $demoTimetable) { PlaceTimetable(place: place) }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     Button {
@@ -290,9 +293,7 @@ private struct MetrobusArrivals: View {
             }
             // Always there: with no more buses today it shows the next days.
             NavigationLink {
-                TimetableView(load: { [metrobus = model.metrobus, code] day in
-                    await metrobus.schedule(code: code, date: day)
-                })
+                PlaceTimetable(place: place)
             } label: {
                 Label(s.timetable, systemImage: "clock")
             }
@@ -358,7 +359,7 @@ private struct RodaliesDepartures: View {
             }
             if let rodalies = model.rodalies, !rodalies.schedule(at: place.name).isEmpty {
                 NavigationLink {
-                    TimetableView(load: { _ in rodalies.schedule(at: place.name) }, byDay: false, note: s.usualTimetableNote)
+                    PlaceTimetable(place: place)
                 } label: {
                     Label(s.timetable, systemImage: "clock")
                 }
@@ -370,6 +371,28 @@ private struct RodaliesDepartures: View {
                 try? await Task.sleep(for: .seconds(60))
                 now = Date()
             }
+        }
+    }
+}
+
+/// The timetable of a Metrobús stop (per day) or a Rodalies station (the
+/// bundled usual day).
+private struct PlaceTimetable: View {
+    let place: Place
+
+    @Environment(AppModel.self) private var model
+    @Environment(\.strings) private var s
+
+    var body: some View {
+        switch place.network {
+        case .rodalies:
+            let rodalies = model.rodalies
+            TimetableView(load: { [name = place.name] _ in rodalies?.schedule(at: name) ?? [] },
+                          byDay: false, note: s.usualTimetableNote)
+        default:
+            TimetableView(load: { [metrobus = model.metrobus, code = String(place.id.dropFirst(3))] day in
+                await metrobus.schedule(code: code, date: day)
+            })
         }
     }
 }

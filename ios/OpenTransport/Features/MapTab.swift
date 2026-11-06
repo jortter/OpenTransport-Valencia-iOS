@@ -70,7 +70,8 @@ struct MapTab: View {
             }
         }
         .onChange(of: model.location.location != nil) { _, located in
-            if located, !nearbyShown, model.map.sheet == nil, model.tab == .map, !showSearch, !showLayers {
+            if located, !nearbyShown, model.map.sheet == nil, model.tab == .map, !showSearch, !showLayers,
+               !AppModel.hasDemoSelection {
                 nearbyShown = true
                 model.map.showNearby()
             }

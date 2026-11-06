@@ -131,18 +131,28 @@ final class AppModel {
         }
     }
 
-    /// `-demoPlace mt-20` (used by CI screenshots).
+    /// `-demoPlace mt-20` (used by CI screenshots): opened once, as soon as
+    /// that network's points have loaded.
     private func openDemoPlace() {
-        guard map.sheet == nil else { return }
-        if let id = UserDefaults.standard.string(forKey: "demoPlace"), let place = places.first(where: { $0.id == id }) {
-            select(place)
-        }
+        guard !demoPlaceOpened, let id = UserDefaults.standard.string(forKey: "demoPlace"),
+              let place = places.first(where: { $0.id == id }) else { return }
+        demoPlaceOpened = true
+        select(place)
+    }
+    @ObservationIgnored private var demoPlaceOpened = false
+
+    /// A CI demo selection was asked for at launch (no "nearby" popup then).
+    static var hasDemoSelection: Bool {
+        let defaults = UserDefaults.standard
+        return defaults.string(forKey: "demoPlace") != nil || defaults.string(forKey: "demoLine") != nil
+            || defaults.integer(forKey: "demoStop") > 0
     }
 
     private func replacePlaces(of network: Network, with fresh: [Place]) {
         guard !fresh.isEmpty else { return }
         places = places.filter { $0.network != network } + fresh
         placesVersion += 1
+        openDemoPlace()
         // Keep an open place sheet on the fresh numbers (bikes, docks…).
         if let selected = map.selectedPlace, let updated = fresh.first(where: { $0.id == selected.id }) {
             map.refreshSelectedPlace(updated)
