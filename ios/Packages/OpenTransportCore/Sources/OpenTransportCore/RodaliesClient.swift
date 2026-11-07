@@ -7,11 +7,15 @@ public struct RodaliesData: Sendable {
     /// "C1"… with the station ids (`rd-` stripped) as stop sequences.
     public let routes: [String: BusRoute]
     private let timetable: [String: [String]]
+    /// A typical week from Renfe's GTFS (ios/tools/make_rodalies_schedule.py):
+    /// "HH:MM|line|destination|weekday mask|last" per station.
+    private let week: [String: [String]]
 
-    public init(places: [Place], routes: [String: BusRoute], timetable: [String: [String]]) {
+    public init(places: [Place], routes: [String: BusRoute], timetable: [String: [String]], week: [String: [String]] = [:]) {
         self.places = places
         self.routes = routes
         self.timetable = timetable
+        self.week = week
     }
 
     static let idBase = 3_000_000
@@ -28,7 +32,10 @@ public struct RodaliesData: Sendable {
         let network = (try? Data(contentsOf: directory.appendingPathComponent("rodalies.geojson"))).map(parseNetwork) ?? ([], [:])
         let times = (try? Data(contentsOf: directory.appendingPathComponent("rodalies_times.json")))
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: [String]] } ?? [:]
-        return RodaliesData(places: network.0, routes: network.1, timetable: times)
+        let week = (try? Data(contentsOf: directory.appendingPathComponent("rodalies_schedule.json")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            .flatMap { $0["stations"] as? [String: [String]] } ?? [:]
+        return RodaliesData(places: network.0, routes: network.1, timetable: times, week: week)
     }
 
     static func parseNetwork(_ data: Data) -> ([Place], [String: BusRoute]) {
@@ -87,8 +94,35 @@ public struct RodaliesData: Sendable {
         return (order.compactMap { stations[$0] }, routes)
     }
 
-    /// The whole day's departures at a station (the bundled table is the
-    /// usual weekday service; it has no calendar).
+    /// Whether the week timetable is bundled (otherwise the old table, capped
+    /// at 80 trains a station and with no calendar).
+    public var hasWeekTimetable: Bool { !week.isEmpty }
+
+    /// Whether a station has any timetable (to offer the timetable screen).
+    public func hasTimetable(at stationName: String) -> Bool {
+        week[stationName] != nil || timetable[stationName] != nil
+    }
+
+    /// A day's departures at a station, trains ending there included (marked
+    /// drop-off only).
+    public func schedule(at stationName: String, on date: Date, calendar: Calendar = .current) -> [ScheduledDeparture] {
+        guard let entries = week[stationName] else { return schedule(at: stationName) }
+        // Calendar weekday: 1 = Sunday … 7 = Saturday; mask bit 0 = Monday.
+        let bit = 1 << ((calendar.component(.weekday, from: date) + 5) % 7)
+        return entries.compactMap { entry -> ScheduledDeparture? in
+            let parts = entry.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            let time = parts.first?.split(separator: ":") ?? []
+            guard parts.count >= 5, time.count >= 2, let hour = Int(time[0]), let minute = Int(time[1]),
+                  let mask = Int(parts[3]), mask & bit != 0 else { return nil }
+            // GTFS hours can run past midnight ("24:10").
+            return ScheduledDeparture(hour: hour % 24, minute: minute, line: parts[1], destination: parts[2],
+                                      dropOffOnly: parts[4] == "1")
+        }
+        .sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
+    }
+
+    /// The whole day's departures at a station from the old table (the usual
+    /// weekday service, no calendar).
     public func schedule(at stationName: String) -> [ScheduledDeparture] {
         (timetable[stationName] ?? []).compactMap { entry -> ScheduledDeparture? in
             let parts = entry.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
@@ -101,7 +135,20 @@ public struct RodaliesData: Sendable {
     }
 
     /// Departures in the next 3 hours at a station (bundled GTFS table).
-    public func times(at stationName: String, now: Date = Date()) -> [Arrival] {
+    public func times(at stationName: String, now: Date = Date(), calendar: Calendar = .current) -> [Arrival] {
+        if week[stationName] != nil {
+            let c = calendar.dateComponents([.hour, .minute], from: now)
+            let nowMinute = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+            // Today's still to come, then tomorrow's early ones for late at night.
+            let upcoming = schedule(at: stationName, on: now).map { ($0.minuteOfDay - nowMinute, $0) }
+                + schedule(at: stationName, on: tomorrow).map { ($0.minuteOfDay + 1440 - nowMinute, $0) }
+            return upcoming
+                .filter { $0.0 >= 0 && $0.0 <= 180 && !$0.1.dropOffOnly }
+                .sorted { $0.0 < $1.0 }
+                .prefix(8)
+                .map { Arrival(line: $0.1.line, destination: $0.1.destination, minutes: "\($0.0) min") }
+        }
         guard let list = timetable[stationName] else { return [] }
         let c = Calendar.current.dateComponents([.hour, .minute], from: now)
         let nowMinute = (c.hour ?? 0) * 60 + (c.minute ?? 0)

@@ -156,4 +156,21 @@ final class MetrobusScheduleTests: XCTestCase {
         let reply = #"[{"route_short_name":"150","route_color":"25D5FF"},{"route_short_name":"160B","route_color":"fe8686"},{"route_short_name":"9","route_color":""},{"route_color":"FFFFFF"}]"#
         XCTAssertEqual(MetrobusClient.parseLineColors(reply), ["MB150": 0x25D5FF, "MB160B": 0xFE8686])
     }
+
+    func testRodaliesWeekTimetable() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Madrid")!
+        // Mask 31 = Monday–Friday, 96 = Saturday–Sunday, 127 = every day.
+        let data = RodaliesData(places: [], routes: [:], timetable: [:], week: [
+            "Nord": ["12:00|C2|Xàtiva|31|0", "12:05|C6|Castelló de la Plana|96|0", "12:10|C1|València-Estació del Nord|127|1",
+                     "12:20|C1|Gandia|127|0"],
+        ])
+        let monday = calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 11, minute: 50))!
+        let saturday = calendar.date(from: DateComponents(year: 2026, month: 11, day: 14, hour: 11, minute: 50))!
+        XCTAssertEqual(data.schedule(at: "Nord", on: monday, calendar: calendar).map(\.line), ["C2", "C1", "C1"])
+        XCTAssertEqual(data.schedule(at: "Nord", on: saturday, calendar: calendar).map(\.line), ["C6", "C1", "C1"])
+        XCTAssertEqual(data.schedule(at: "Nord", on: monday, calendar: calendar).map(\.dropOffOnly), [false, true, false])
+        // Next departures skip the train ending here.
+        XCTAssertEqual(data.times(at: "Nord", now: monday, calendar: calendar).map(\.minutes), ["10 min", "30 min"])
+    }
 }

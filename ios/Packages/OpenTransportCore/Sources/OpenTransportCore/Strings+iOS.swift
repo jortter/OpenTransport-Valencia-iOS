@@ -85,6 +85,11 @@ extension Strings {
     public var tomorrow: String { pick("Mañana", "Tomorrow", "Demà") }
     public var nextDeparture: String { pick("Próxima", "Next", "Pròxima") }
     public var dropOffOnly: String { pick("Solo bajada", "Drop-off only", "Només baixada") }
+    public var renfeWeekTimetableNote: String {
+        pick("Horario de Renfe incluido en la app (semana tipo); puede cambiar en festivos u obras.",
+             "Renfe's timetable bundled with the app (a typical week); it may change on holidays or during works.",
+             "Horari de Renfe inclòs en l'app (setmana tipus); pot canviar en festius o obres.")
+    }
     public var usualTimetableNote: String {
         pick("Horario habitual de Renfe incluido en la app; puede cambiar en festivos u obras.",
              "Renfe's usual timetable, bundled with the app; it may change on holidays or during works.",

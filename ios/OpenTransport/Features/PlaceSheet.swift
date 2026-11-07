@@ -357,7 +357,7 @@ private struct RodaliesDepartures: View {
                     }
                 }
             }
-            if let rodalies = model.rodalies, !rodalies.schedule(at: place.name).isEmpty {
+            if let rodalies = model.rodalies, rodalies.hasTimetable(at: place.name) {
                 NavigationLink {
                     PlaceTimetable(place: place)
                 } label: {
@@ -387,8 +387,13 @@ private struct PlaceTimetable: View {
         switch place.network {
         case .rodalies:
             let rodalies = model.rodalies
-            TimetableView(load: { [name = place.name] _ in rodalies?.schedule(at: name) ?? [] },
-                          byDay: false, note: s.usualTimetableNote)
+            if let rodalies, rodalies.hasWeekTimetable {
+                TimetableView(load: { [name = place.name] day in rodalies.schedule(at: name, on: day) },
+                              note: s.renfeWeekTimetableNote)
+            } else {
+                TimetableView(load: { [name = place.name] _ in rodalies?.schedule(at: name) ?? [] },
+                              byDay: false, note: s.usualTimetableNote)
+            }
         default:
             TimetableView(load: { [metrobus = model.metrobus, code = String(place.id.dropFirst(3))] day in
                 await metrobus.schedule(code: code, date: day)
