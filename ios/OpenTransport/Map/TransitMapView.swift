@@ -164,17 +164,6 @@ struct TransitMapView: UIViewRepresentable {
             registeredPills = []
         }
 
-        /// Buildings stand up only while the map is tilted (button or gesture);
-        /// seen from straight above they would just cover the streets.
-        func mapViewRegionIsChanging(_ mapView: MLNMapView) { updateBuildings(mapView) }
-        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) { updateBuildings(mapView) }
-
-        private func updateBuildings(_ map: MLNMapView) {
-            guard let layer = style?.layer(withIdentifier: Self.buildingsLayer) else { return }
-            let visible = map.camera.pitch > 8
-            if layer.isVisible != visible { layer.isVisible = visible }
-        }
-
         func mapView(_ mapView: MLNMapView, regionWillChangeWith reason: MLNCameraChangeReason, animated: Bool) {
             // Pinch zoom keeps following; panning or turning the map takes over.
             let takeover: MLNCameraChangeReason = [.gesturePan, .gestureRotate, .gestureTilt]
@@ -190,21 +179,28 @@ struct TransitMapView: UIViewRepresentable {
             applyScene(on: mapView)
         }
 
-        /// Extruded buildings from the base map's own tiles (Carto's Protomaps
-        /// schema: `buildings` with `height` in metres, missing for about a
-        /// fifth of them). Added first, so lines, stops and buses draw over them.
+        /// Extruded buildings from the base map's own tiles, as on Android
+        /// (`emt-buildings-3d`: same colours, 0.78 opacity, 12 m when the height
+        /// is unknown, from zoom 14, under the first text label). Carto's
+        /// current tiles use the Protomaps schema (`buildings`, `height`);
+        /// older OpenMapTiles ones `building` with `render_height`.
         private func add3DBuildings(to style: MLNStyle) {
-            guard let source = style.sources.first(where: { $0 is MLNVectorTileSource }) else { return }
+            let sources = style.sources.compactMap { $0 as? MLNVectorTileSource }
+            guard let source = sources.first(where: { $0.identifier == "protomaps" })
+                ?? sources.first(where: { ["openmaptiles", "carto"].contains($0.identifier) }) ?? sources.first else { return }
             let layer = MLNFillExtrusionStyleLayer(identifier: Self.buildingsLayer, source: source)
-            layer.sourceLayerIdentifier = "buildings"
+            layer.sourceLayerIdentifier = source.identifier == "protomaps" ? "buildings" : "building"
             layer.minimumZoomLevel = 14
-            layer.fillExtrusionColor = NSExpression(forConstantValue: parent.dark ? UIColor(white: 0.24, alpha: 1)
-                                                                                    : UIColor(white: 0.86, alpha: 1))
-            layer.fillExtrusionOpacity = NSExpression(forConstantValue: 0.85)
-            layer.fillExtrusionHeight = NSExpression(format: "mgl_coalesce({height, 9})")
-            layer.fillExtrusionBase = NSExpression(format: "mgl_coalesce({min_height, 0})")
-            layer.isVisible = (map?.camera.pitch ?? 0) > 8
-            style.addLayer(layer)
+            layer.fillExtrusionColor = NSExpression(forConstantValue: UIColor(hex: parent.dark ? 0x3A3F44 : 0xE6E1DA))
+            layer.fillExtrusionOpacity = NSExpression(forConstantValue: 0.78)
+            layer.fillExtrusionHeight = NSExpression(format: "mgl_coalesce({render_height, height, 12})")
+            layer.fillExtrusionBase = NSExpression(format: "mgl_coalesce({render_min_height, min_height, 0})")
+            // Below the first street or place name, so labels stay readable.
+            if let label = style.layers.first(where: { ($0 as? MLNSymbolStyleLayer)?.text != nil }) {
+                style.insertLayer(layer, below: label)
+            } else {
+                style.addLayer(layer)
+            }
         }
 
         private func addLayers(to style: MLNStyle) {
