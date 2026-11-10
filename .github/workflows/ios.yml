@@ -83,6 +83,7 @@ jobs:
           WAIT=90 shot 10-plan-result -initialTab plan -demoPlan 7,686
           WAIT=30 shot 11-metrobus -initialTab map -demoPlace mb-3940 -language es
           WAIT=30 shot 12-metrobus-timetable -initialTab map -demoPlace mb-3940 -demoTimetable YES -language es
+          shot 14-map-3d -initialTab map -demoStop 7 -demoTilt YES -language es
           shot 13-rodalies-timetable -initialTab map -demoPlace rd-3000000 -demoTimetable YES -language es
           # Crash reports, if the app died during any shot.
           cp ~/Library/Logs/DiagnosticReports/OpenTransport*.ips ci-shots/ 2>/dev/null || true
