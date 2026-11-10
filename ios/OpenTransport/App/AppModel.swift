@@ -133,10 +133,12 @@ final class AppModel {
         } else if defaults.integer(forKey: "demoStop") > 0 {
             map.selectStop(defaults.integer(forKey: "demoStop"))
         }
-        // `-demoTilt YES`: the 3D view (after the stop's own camera move).
+        // `-demoTilt YES`: the 3D view up close in the centre, where buildings show.
         if defaults.bool(forKey: "demoTilt") {
             Task {
                 try? await Task.sleep(for: .seconds(3))
+                map.move(.center(LonLat(lon: -0.3763, lat: 39.4699), zoom: 16.5))
+                try? await Task.sleep(for: .seconds(2))
                 map.toggleTilt()
             }
         }
