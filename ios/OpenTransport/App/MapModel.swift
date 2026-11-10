@@ -35,7 +35,7 @@ struct CameraRequest: Equatable {
         case fit(LngLatBounds)
         /// Tilt for the 3D perspective (0 = flat).
         case pitch(Double)
-        /// North up and flat, framing `bounds` when given (Android's resetView).
+        /// North up, framing `bounds` when given (Android's resetView).
         case reset(LngLatBounds?)
     }
 
@@ -185,8 +185,8 @@ final class MapModel {
         move(.pitch(tilted ? 55 : 0))
     }
 
+    /// North up, keeping the tilt: flattening is the 2D/3D button's job.
     func resetView() {
-        tilted = false
         move(.reset(currentLine.flatMap { transit?.routes[$0]?.bounds }))
     }
 

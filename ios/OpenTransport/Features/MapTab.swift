@@ -94,7 +94,7 @@ struct MapTab: View {
             VStack(spacing: 12) {
                 roundButton("square.3.layers.3d", label: s.mapLayers) { present { showLayers = true } }
                 roundButton(model.map.tilted ? "view.2d" : "view.3d", label: s.view3D) { model.map.toggleTilt() }
-                roundButton("location.north.line.fill", label: s.resetView) { model.map.resetView() }
+                roundButton("location.north.line.fill", label: s.northUp) { model.map.resetView() }
                 roundButton("location.fill", label: s.myLocation) {
                     recenterRequest += 1
                     model.map.showNearby()

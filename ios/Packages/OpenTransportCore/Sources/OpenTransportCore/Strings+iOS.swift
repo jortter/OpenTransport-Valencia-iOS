@@ -81,6 +81,7 @@ extension Strings {
         pick("Este autobús ya no envía su posición.", "This bus no longer reports its position.", "Este autobús ja no envia la seua posició.")
     }
     public var day: String { pick("Día", "Day", "Dia") }
+    public var northUp: String { pick("Norte arriba", "North up", "Nord amunt") }
     public var today: String { pick("Hoy", "Today", "Hui") }
     public var tomorrow: String { pick("Mañana", "Tomorrow", "Demà") }
     public var nextDeparture: String { pick("Próxima", "Next", "Pròxima") }

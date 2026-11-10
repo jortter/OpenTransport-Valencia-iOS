@@ -146,6 +146,7 @@ struct TransitMapView: UIViewRepresentable {
         static let contextLayer = "emt-context-routes"
         static let bikesLayer = "emt-vb-pills"
         static let journeySource = "emt-journey"
+        static let buildingsLayer = "buildings-3d"
         static let metrobusVehiclesSource = "metrobus-vehicles"
         static let journeyDotsSource = "emt-journey-stops"
         /// JOURNEY_PALETTE in NativeMap.kt: one colour per ride of a trip.
@@ -163,6 +164,17 @@ struct TransitMapView: UIViewRepresentable {
             registeredPills = []
         }
 
+        /// Buildings stand up only while the map is tilted (button or gesture);
+        /// seen from straight above they would just cover the streets.
+        func mapViewRegionIsChanging(_ mapView: MLNMapView) { updateBuildings(mapView) }
+        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) { updateBuildings(mapView) }
+
+        private func updateBuildings(_ map: MLNMapView) {
+            guard let layer = style?.layer(withIdentifier: Self.buildingsLayer) else { return }
+            let visible = map.camera.pitch > 8
+            if layer.isVisible != visible { layer.isVisible = visible }
+        }
+
         func mapView(_ mapView: MLNMapView, regionWillChangeWith reason: MLNCameraChangeReason, animated: Bool) {
             // Pinch zoom keeps following; panning or turning the map takes over.
             let takeover: MLNCameraChangeReason = [.gesturePan, .gestureRotate, .gestureTilt]
@@ -178,7 +190,25 @@ struct TransitMapView: UIViewRepresentable {
             applyScene(on: mapView)
         }
 
+        /// Extruded buildings from the base map's own tiles (Carto's Protomaps
+        /// schema: `buildings` with `height` in metres, missing for about a
+        /// fifth of them). Added first, so lines, stops and buses draw over them.
+        private func add3DBuildings(to style: MLNStyle) {
+            guard let source = style.sources.first(where: { $0 is MLNVectorTileSource }) else { return }
+            let layer = MLNFillExtrusionStyleLayer(identifier: Self.buildingsLayer, source: source)
+            layer.sourceLayerIdentifier = "buildings"
+            layer.minimumZoomLevel = 14
+            layer.fillExtrusionColor = NSExpression(forConstantValue: parent.dark ? UIColor(white: 0.24, alpha: 1)
+                                                                                    : UIColor(white: 0.86, alpha: 1))
+            layer.fillExtrusionOpacity = NSExpression(forConstantValue: 0.85)
+            layer.fillExtrusionHeight = NSExpression(format: "mgl_coalesce({height, 9})")
+            layer.fillExtrusionBase = NSExpression(format: "mgl_coalesce({min_height, 0})")
+            layer.isVisible = (map?.camera.pitch ?? 0) > 8
+            style.addLayer(layer)
+        }
+
         private func addLayers(to style: MLNStyle) {
+            add3DBuildings(to: style)
             // Route lines first so stops and buses draw on top of them.
             let context = MLNShapeSource(identifier: Self.contextSource, shape: nil, options: nil)
             style.addSource(context)
@@ -582,7 +612,6 @@ struct TransitMapView: UIViewRepresentable {
                 map.setCamera(camera, withDuration: 0.4, animationTimingFunction: nil)
             case .reset(let bounds):
                 let camera = map.camera
-                camera.pitch = 0
                 camera.heading = 0
                 map.setCamera(camera, animated: true)
                 if let bounds { apply(CameraRequest(id: request.id, kind: .fit(bounds)), on: map) }
