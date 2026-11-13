@@ -51,8 +51,6 @@ final class MapModel {
     var sheet: MapSheet?
     private(set) var currentLine: String?
     private(set) var cameraRequest: CameraRequest?
-    /// Behind-the-bus 3D camera while following (Android's followPitch 58°).
-    var follow3D = false
     /// 3D perspective of the free map (Android's tilt button, 55°).
     private(set) var tilted = false
     let live = LiveBuses()
@@ -76,14 +74,6 @@ final class MapModel {
     /// The selected Metro/Valenbisi/… point (kept whole: places reload often).
     private(set) var selectedPlace: Place?
 
-    var followedBus: Int? {
-        if case .bus(let number) = sheet { return number }
-        return nil
-    }
-
-    /// Whether the camera trails the followed bus. Dragging or rotating the
-    /// map lets go of it (the bus stays selected) until "centre" is tapped.
-    var followCameraLocked = true
 
     func selectStop(_ id: Int) {
         guard let stop = transit?.stopsById[String(id)] else { return }
@@ -139,10 +129,12 @@ final class MapModel {
         move(.center(LonLat(lon: vehicle.lon, lat: vehicle.lat), zoom: 15.5))
     }
 
+    /// Opens a live EMT bus and centres on it once, leaving the map free:
+    /// the same as a Metrobús bus (`selectMetrobusBus`).
     func followBus(_ number: Int) {
-        guard live.buses.contains(where: { $0.number == number }) else { return }
-        followCameraLocked = true
+        guard let bus = live.buses.first(where: { $0.number == number }) else { return }
         present(.bus(number))
+        move(.center(bus.render, zoom: 15.5))
     }
 
     private func present(_ next: MapSheet) {

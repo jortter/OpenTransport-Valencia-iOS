@@ -1,8 +1,9 @@
 import SwiftUI
 import OpenTransportCore
 
-/// Port of `FollowSheet` in EmtApp.kt: one live bus, the camera behind it and
-/// the minutes to its next stops.
+/// A live EMT bus: laid out and behaving like a live Metrobús bus
+/// (`MetrobusBusSheet`), so both networks feel the same. The map centres on
+/// the bus when it opens and stays free; the bus keeps moving on it.
 struct FollowSheet: View {
     let number: Int
 
@@ -12,6 +13,7 @@ struct FollowSheet: View {
 
     var body: some View {
         let bus = model.map.live.buses.first { $0.number == number }
+        let next = bus.map(upcoming) ?? []
 
         NavigationStack {
             List {
@@ -22,20 +24,48 @@ struct FollowSheet: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(bus.destination.isEmpty ? s.lineTitle(bus.line) : bus.destination)
                                     .font(.headline)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
                                 Text(s.directionLabel(bus.direction ?? "ida"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        // Where Metrobús shows the distance to the stop, EMT has the bus's next stop.
+                        if let first = next.first {
+                            LabeledContent(first.stop.cleanName) {
+                                Text("\(first.minutes) min").monospacedDigit()
+                            }
+                        }
+                    } footer: {
+                        Text(s.emtPositionNote)
                     }
-                    Section(s.nextStops) {
-                        ForEach(Array(upcoming(bus).enumerated()), id: \.offset) { _, item in
-                            HStack(spacing: 12) {
-                                Image(systemName: "mappin.circle.fill").foregroundStyle(.secondary)
-                                Text(item.stop.cleanName).lineLimit(1)
-                                Spacer()
-                                Text("\(item.minutes) min").foregroundStyle(Color.accentColor).monospacedDigit()
+                    Section {
+                        Button {
+                            model.map.move(.center(bus.render, zoom: 15.5))
+                        } label: {
+                            Label(s.centerOnBus, systemImage: "scope")
+                        }
+                        let pin = ArrivalAlerts.stopPin(bus.nextStop, bus.line)
+                        Button {
+                            model.togglePin(pin)
+                        } label: {
+                            Label(s.alertAtNextStop, systemImage: model.isPinned(pin) ? "bell.fill" : "bell")
+                        }
+                        Button {
+                            openInMaps(lat: bus.render.lat, lon: bus.render.lon, name: s.busTitle(number))
+                        } label: {
+                            Label(s.openPositionInMaps, systemImage: "map")
+                        }
+                    }
+                    if next.count > 1 {
+                        Section(s.nextStops) {
+                            ForEach(Array(next.dropFirst().enumerated()), id: \.offset) { _, item in
+                                HStack(spacing: 12) {
+                                    Image(systemName: "mappin.circle.fill").foregroundStyle(.secondary)
+                                    Text(item.stop.cleanName).lineLimit(1)
+                                    Spacer()
+                                    Text("\(item.minutes) min").foregroundStyle(Color.accentColor).monospacedDigit()
+                                }
                             }
                         }
                     }
@@ -46,46 +76,8 @@ struct FollowSheet: View {
             .navigationTitle(s.busTitle(number))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if !model.map.followCameraLocked {
-                        Button {
-                            model.map.followCameraLocked = true
-                        } label: {
-                            Image(systemName: "scope")
-                        }
-                        .accessibilityLabel(s.centerOnBus)
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        model.map.follow3D.toggle()
-                    } label: {
-                        Image(systemName: model.map.follow3D ? "cube.fill" : "cube")
-                    }
-                    .accessibilityLabel(s.view3D)
-                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        if let bus {
-                            Button {
-                                model.togglePin(ArrivalAlerts.stopPin(bus.nextStop, bus.line))
-                            } label: {
-                                Label(s.alertAtNextStop, systemImage: "bell")
-                            }
-                            Button {
-                                openInMaps(lat: bus.render.lat, lon: bus.render.lon, name: s.busTitle(number))
-                            } label: {
-                                Label(s.openPositionInMaps, systemImage: "map")
-                            }
-                        }
-                        Button(role: .destructive) {
-                            dismiss()
-                        } label: {
-                            Label(s.stopFollowing, systemImage: "xmark")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
+                    Button(s.close) { dismiss() }
                 }
             }
         }

@@ -27,15 +27,11 @@ struct MapTab: View {
                     live: map.live,
                     dark: (MapStyle(rawValue: styleSetting) ?? .auto).isDark(system: colorScheme),
                     cameraRequest: map.cameraRequest,
-                    followedBus: map.followedBus,
-                    follow3D: map.follow3D,
-                    followCameraLocked: map.followCameraLocked,
                     sheetFraction: detent == MapTab.peek ? 0.32 : 0.5,
                     recenterRequest: recenterRequest,
                     onSelectStop: { map.selectStop($0) },
                     onSelectBus: { map.followBus($0) },
                     onSelectPlace: { id in if let place = model.place(id) { model.select(place) } },
-                    onCameraGesture: { map.followCameraLocked = false },
                     onSelectMetrobusBus: { map.selectMetrobusBus($0) }
                 )
                 .ignoresSafeArea(edges: .top)

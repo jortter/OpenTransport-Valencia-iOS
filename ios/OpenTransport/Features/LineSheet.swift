@@ -29,20 +29,20 @@ struct LineSheet: View {
                     // Tap a bus to follow it (on the map it is a small target).
                     Section(s.liveBusesTitle) {
                         ForEach(buses.sorted { $0.number < $1.number }, id: \.number) { bus in
+                            // Same row as a live Metrobús bus in a stop's sheet.
                             Button {
                                 model.map.followBus(bus.number)
                             } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: "bus.fill")
-                                        .foregroundStyle(bus.direction == "vuelta" ? Color.red : Color.blue)
+                                    LineBadge(line: bus.line)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("\(s.busTitle(bus.number)) · \(bus.destination)").lineLimit(1)
+                                        Text(bus.destination.isEmpty ? s.busTitle(bus.number) : bus.destination).lineLimit(1)
                                         if let next = model.transit?.stopsById[String(bus.nextStop)] {
                                             Text(s.nextStopName(next.cleanName)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                         }
                                     }
                                     Spacer()
-                                    Image(systemName: "location.north.circle").foregroundStyle(Color.accentColor)
+                                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                                 }
                             }
                             .tint(.primary)

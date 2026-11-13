@@ -77,6 +77,11 @@ extension Strings {
              "The bus's GPS position, refreshed about every 20 s.",
              "Posició GPS de l'autobús; s'actualitza cada 20 s aproximadament.")
     }
+    public var emtPositionNote: String {
+        pick("Posición en directo de la EMT; el autobús se mueve en el mapa.",
+             "EMT's live position; the bus moves on the map.",
+             "Posició en directe de l'EMT; l'autobús es mou al mapa.")
+    }
     public var metrobusBusGone: String {
         pick("Este autobús ya no envía su posición.", "This bus no longer reports its position.", "Este autobús ja no envia la seua posició.")
     }
